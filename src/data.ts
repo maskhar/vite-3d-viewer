@@ -20,10 +20,10 @@ export const models: Model3D[] = [
   },
   {
     id: '2',
-    name: 'Ketua Dikopinda Kota Malang',
+    name: 'Wali Kota Malang',
     category: 'Character',
-    description: 'Ketua Dikopinda Kota Malang',
-    modelPath: getModelUrl('ketua-dikopinda-kota-malang.glb'),
+    description: 'Wali Kota Malang',
+    modelPath: getModelUrl('Wali Kota Malang - Full Badan.glb'),
     preview: {
       cameraPosition: [0, 1, 7],
       scale: 2,
