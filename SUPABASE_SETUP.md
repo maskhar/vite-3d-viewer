@@ -1,13 +1,18 @@
 ﻿# Supabase Storage Setup Guide
 
-## File yang Perlu Diupload ke Supabase Storage
+## Upload Semua File GLB ke Supabase Storage
 
-File-file berikut terlalu besar untuk Git (>100MB) dan perlu diupload ke Supabase Storage:
+Semua file model 3D (.glb) sekarang disimpan di Supabase Storage untuk menghindari batasan ukuran file GitHub.
+
+**File yang perlu diupload:**
 
 1. **maskot-fm11.glb** (105.91 MB)
 2. **ketua-dikopinda-kota-malang.glb** (128.02 MB)
-
-File lainnya tetap disimpan di repository karena ukurannya kecil (<10MB).
+3. **miniatur- (1).glb** (7.59 MB)
+4. **miniatur- (2).glb** (3.81 MB)
+5. **miniatur- (3).glb** (4.36 MB)
+6. **miniatur- (4).glb** (3.6 MB)
+7. **miniatur- (5).glb** (3.17 MB)
 
 ## Langkah-langkah Setup
 
@@ -21,12 +26,19 @@ Buka: https://supabase.carubra.com
 - Set sebagai **Public bucket** (centang "Public bucket")
 - Klik **Create bucket**
 
-### 3. Upload File GLB
+### 3. Upload Semua File GLB
 - Masuk ke bucket `3d-models` yang baru dibuat
 - Klik **Upload file**
-- Upload 2 file berikut:
-  - `maskot-fm11.glb` (dari: `public/models/maskot-fm11.glb`)
-  - `ketua-dikopinda-kota-malang.glb` (dari: `public/models/ketua-dikopinda-kota-malang.glb`)
+- Upload semua 7 file GLB dari folder `public/models/`:
+  - `maskot-fm11.glb`
+  - `ketua-dikopinda-kota-malang.glb`
+  - `miniatur- (1).glb`
+  - `miniatur- (2).glb`
+  - `miniatur- (3).glb`
+  - `miniatur- (4).glb`
+  - `miniatur- (5).glb`
+
+**PENTING:** Upload dengan nama file yang sama persis (termasuk spasi dan tanda kurung).
 
 ### 4. Set Environment Variables
 Edit file `.env` di root project:
@@ -62,26 +74,43 @@ npm run dev
 
 Buka browser dan pastikan semua model bisa diload dengan baik.
 
-## Struktur File
+## Struktur File di Supabase Storage
 
-**File di Supabase Storage:**
-- `maskot-fm11.glb`
-- `ketua-dikopinda-kota-malang.glb`
+```
+3d-models/
+├── maskot-fm11.glb
+├── ketua-dikopinda-kota-malang.glb
+├── miniatur- (1).glb
+├── miniatur- (2).glb
+├── miniatur- (3).glb
+├── miniatur- (4).glb
+└── miniatur- (5).glb
+```
 
-**File di Git Repository:**
-- `miniatur- (1).glb` (7.59 MB)
-- `miniatur- (2).glb` (3.81 MB)
-- `miniatur- (3).glb` (4.36 MB)
-- `miniatur- (4).glb` (3.6 MB)
-- `miniatur- (5).glb` (3.17 MB)
+## URL Format
+
+Setelah upload, file bisa diakses via:
+```
+https://supabase.carubra.com/storage/v1/object/public/3d-models/[filename]
+```
+
+Contoh:
+```
+https://supabase.carubra.com/storage/v1/object/public/3d-models/maskot-fm11.glb
+```
 
 ## Troubleshooting
 
 ### Model tidak muncul
 - Cek console browser untuk error
-- Pastikan environment variables sudah benar
+- Pastikan environment variables sudah benar di `.env`
 - Pastikan bucket policy sudah public
-- Verify URL di browser: `https://supabase.carubra.com/storage/v1/object/public/3d-models/maskot-fm11.glb`
+- Verify URL di browser untuk memastikan file bisa diakses
 
 ### CORS Error
 Pastikan Supabase Storage CORS sudah dikonfigurasi untuk mengijinkan request dari domain aplikasi kamu.
+
+### File tidak bisa diupload
+- Cek quota storage di Supabase
+- Pastikan file size tidak melebihi limit
+- Coba upload satu per satu jika batch upload gagal

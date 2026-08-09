@@ -8,8 +8,3 @@ export function getModelUrl(filename: string): string {
   
   return data.publicUrl
 }
-
-// For models stored locally (smaller files)
-export function getLocalModelUrl(filename: string): string {
-  return `/models/${filename}`
-}
