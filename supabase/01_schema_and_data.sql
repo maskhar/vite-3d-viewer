@@ -240,11 +240,14 @@ ON CONFLICT DO NOTHING;
 -- UPDATE public.models_catalog SET display_order = 1 WHERE id = 'uuid-here';
 
 -- ============================================
--- 6. HELPER VIEWS (Optional)
+-- 6. HELPER VIEWS (Optional) - SECURITY FIXED
 -- ============================================
 
 -- View untuk mendapatkan data dalam format yang siap pakai frontend
-CREATE OR REPLACE VIEW public.models_catalog_formatted AS
+-- FIXED: Added security_invoker = true to prevent SECURITY DEFINER vulnerability
+CREATE OR REPLACE VIEW public.models_catalog_formatted
+WITH (security_invoker = true)
+AS
 SELECT 
   id,
   name,
@@ -277,3 +280,8 @@ GRANT SELECT ON public.models_catalog_formatted TO anon, authenticated;
 -- Copy semua SQL di atas dan jalankan di Supabase SQL Editor
 -- Dashboard URL: https://supabase.carubra.com
 -- Navigate to: SQL Editor > New Query > Paste > Run
+--
+-- SECURITY NOTE:
+-- View now uses security_invoker = true (SECURITY INVOKER)
+-- This ensures queries respect the permissions of the user making the query,
+-- not the view creator, preventing privilege escalation attacks.
