@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { LogIn, Home } from 'lucide-react';
@@ -8,7 +8,26 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    checkExistingSession();
+  }, []);
+
+  async function checkExistingSession() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Already logged in, redirect to admin
+        navigate('/admin', { replace: true });
+      }
+    } catch (error) {
+      console.error('Error checking session:', error);
+    } finally {
+      setChecking(false);
+    }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -25,7 +44,7 @@ export default function LoginPage() {
       if (error) throw error;
 
       if (data.session) {
-        navigate('/admin');
+        navigate('/admin', { replace: true });
       }
     } catch (error: any) {
       console.error('Login error:', error);
@@ -33,6 +52,18 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Show loading while checking session
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-600 font-semibold">Checking session...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
