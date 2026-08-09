@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+﻿import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -20,6 +20,7 @@ const Model3DComponent: React.FC<Model3DProps> = ({
   const groupRef = useRef<THREE.Group>(null);
   
   // Use the hook unconditionally - drei handles caching internally
+  // Draco compression is automatically supported by drei
   const gltf = useGLTF(modelPath);
 
   useFrame((_state, delta) => {
@@ -47,6 +48,11 @@ const Model3DComponent: React.FC<Model3DProps> = ({
 // Preload models to avoid multiple loading attempts
 export const preloadModel = (path: string) => {
   useGLTF.preload(path);
+};
+
+// Clear model cache when needed (useful for memory management)
+export const clearModelCache = (path: string) => {
+  useGLTF.clear(path);
 };
 
 export default Model3DComponent;

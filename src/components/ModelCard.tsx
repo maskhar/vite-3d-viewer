@@ -1,8 +1,4 @@
-import React, { Suspense } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
-import Model3DComponent from './Model3D';
-import ErrorBoundary from './ErrorBoundary';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Model3D } from '../types';
 import './ModelCard.css';
 
@@ -11,45 +7,61 @@ interface ModelCardProps {
   onClick: () => void;
 }
 
-const LoadingBox = () => (
-  <mesh>
-    <boxGeometry args={[1, 1, 1]} />
-    <meshStandardMaterial color="#6366f1" wireframe />
-  </mesh>
-);
-
 const ModelCard: React.FC<ModelCardProps> = ({ model, onClick }) => {
+  const [isVisible, setIsVisible] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+          }
+        });
+      },
+      {
+        rootMargin: '100px', // Start loading 100px before card is visible
+        threshold: 0.01,
+      }
+    );
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+
+    return () => {
+      if (cardRef.current) {
+        observer.unobserve(cardRef.current);
+      }
+    };
+  }, []);
+
   return (
-    <div className="model-card" onClick={onClick}>
+    <div ref={cardRef} className="model-card" onClick={onClick}>
       <div className="model-card-preview">
-        <ErrorBoundary fallback={
-          <div className="canvas-error">
-            <p>Preview unavailable</p>
+        {model.thumbnailPath ? (
+          <>
+            {!imageLoaded && (
+              <div className="thumbnail-loading">
+                <div className="loading-spinner"></div>
+              </div>
+            )}
+            <img
+              src={isVisible ? model.thumbnailPath : ''}
+              alt={model.name}
+              className={`model-thumbnail ${imageLoaded ? 'loaded' : ''}`}
+              onLoad={() => setImageLoaded(true)}
+              loading="lazy"
+            />
+            <div className="model-3d-badge">3D</div>
+          </>
+        ) : (
+          <div className="thumbnail-placeholder">
+            <span>No Preview</span>
           </div>
-        }>
-          <Canvas>
-            <Suspense fallback={<LoadingBox />}>
-              <PerspectiveCamera
-                makeDefault
-                position={model.preview?.cameraPosition || [0, 0, 5]}
-              />
-              <ambientLight intensity={0.5} />
-              <directionalLight position={[5, 5, 5]} intensity={1} />
-              <directionalLight position={[-5, 5, -5]} intensity={0.5} />
-              <Model3DComponent
-                modelPath={model.modelPath}
-                rotation={model.preview?.rotation}
-                scale={model.preview?.scale}
-                autoRotate={true}
-              />
-              <OrbitControls
-                enableZoom={false}
-                enablePan={false}
-                autoRotate={false}
-              />
-            </Suspense>
-          </Canvas>
-        </ErrorBoundary>
+        )}
       </div>
       <div className="model-card-info">
         <h3 className="model-card-name">{model.name}</h3>
@@ -59,7 +71,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onClick }) => {
         )}
       </div>
       <div className="model-card-overlay">
-        <span className="view-model-text">View Model</span>
+        <span className="view-model-text">View 3D Model</span>
       </div>
     </div>
   );

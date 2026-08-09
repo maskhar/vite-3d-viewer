@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from 'react';
+﻿import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera, Grid } from '@react-three/drei';
 import {
@@ -10,8 +10,9 @@ import {
   Lightbulb,
   Box,
 } from 'lucide-react';
-import Model3DComponent from './Model3D';
+import Model3DComponent, { preloadModel } from './Model3D';
 import ErrorBoundary from './ErrorBoundary';
+import LoadingProgress from './LoadingProgress';
 import { Model3D, ViewerSettings } from '../types';
 import './ModelViewer.css';
 
@@ -29,12 +30,24 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ model, onClose }) => {
     background: 'dark',
   });
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isModelLoading, setIsModelLoading] = useState(true);
   const viewerRef = useRef<HTMLDivElement>(null);
   const controlsRef = useRef<any>(null);
 
   useEffect(() => {
     if (model) {
       document.body.style.overflow = 'hidden';
+      setIsModelLoading(true);
+      
+      // Preload the 3D model
+      preloadModel(model.modelPath);
+      
+      // Simulate loading completion (drei doesn't provide load events directly)
+      const timer = setTimeout(() => {
+        setIsModelLoading(false);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
     }
     return () => {
       document.body.style.overflow = 'auto';
@@ -97,6 +110,7 @@ const ModelViewer: React.FC<ModelViewerProps> = ({ model, onClose }) => {
         </div>
 
         <div className="viewer-canvas">
+          {isModelLoading && <LoadingProgress progress={50} />}
           <ErrorBoundary fallback={
             <div style={{ 
               display: 'flex', 

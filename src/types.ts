@@ -4,6 +4,7 @@
   category: string;
   description?: string;
   modelPath: string;
+  thumbnailPath?: string; // New field for static preview image
   
   preview?: {
     cameraPosition?: [number, number, number];
