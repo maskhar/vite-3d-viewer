@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Upload, GripVertical, X, Home, FolderTree } from 'lucide-react';
+import { Upload, GripVertical, Home, FolderTree } from 'lucide-react';
 import CategoryManager from '../components/CategoryManager';
 
 interface Model {
@@ -134,24 +134,20 @@ function SortableRow({ model, editingId, editForm, uploading, setEditingId, setE
             </button>
           </div>
         ) : (
-          <div className="flex flex-col sm:flex-row gap-1 sm:gap-2">
-            {model.is_active && (
-              <button
-                onClick={() => {
-                  setEditingId(model.id);
-                  setEditForm({ 
-                    name: model.name, 
-                    description: model.description,
-                    file: null,
-                    currentFilename: model.model_filename
-                  });
-                }}
-                className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-blue-500 hover:bg-blue-600 text-white rounded font-semibold transition-colors"
-              >
-                Edit
-              </button>
-            )}
-          </div>
+          <button
+            onClick={() => {
+              setEditingId(model.id);
+              setEditForm({
+                name: model.name,
+                description: model.description || '',
+                file: null,
+                currentFilename: model.model_filename,
+              });
+            }}
+            className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs bg-blue-500 hover:bg-blue-600 text-white rounded font-semibold transition-colors"
+          >
+            Edit
+          </button>
         )}
       </td>
     </tr>
@@ -165,33 +161,23 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [showCategoryManager, setShowCategoryManager] = useState(false);
-  const [categories, setCategories] = useState<string[]>(['Character', 'Object', 'Environment']);
-  
-  // Filter state
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
-
-  // Form state untuk tambah model baru
-  const [formData, setFormData] = useState({
-    name: '',
-    category: 'Character',
-    description: '',
-    file: null as File | null,
-  });
-
-  // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ 
-    name: '', 
-    description: '', 
-    file: null as File | null,
-    currentFilename: ''
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    description: string;
+    file: File | null;
+    currentFilename: string;
+  }>({
+    name: '',
+    description: '',
+    file: null,
+    currentFilename: '',
   });
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
 
-  // Drag and drop sensors
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -199,80 +185,78 @@ export default function AdminPage() {
     })
   );
 
-  // Dropzone for file upload
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'model/gltf-binary': ['.glb'],
-    },
+    accept: { 'model/gltf-binary': ['.glb'] },
     maxFiles: 1,
-    onDrop: (acceptedFiles) => {
+    onDrop: async (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
-        setFormData({ ...formData, file: acceptedFiles[0] });
+        await handleUpload(acceptedFiles[0]);
       }
     },
   });
 
   useEffect(() => {
+    checkAuth();
     loadModels();
-    loadCategories();
+    
+    // Setup Supabase Realtime subscription
+    const channel = supabase
+      .channel('models_catalog_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'models_catalog'
+        },
+        (payload) => {
+          console.log('Realtime update:', payload);
+          
+          if (payload.eventType === 'INSERT') {
+            setModels(prev => [...prev, payload.new as Model]);
+          } else if (payload.eventType === 'UPDATE') {
+            setModels(prev => prev.map(m => m.id === payload.new.id ? payload.new as Model : m));
+          } else if (payload.eventType === 'DELETE') {
+            setModels(prev => prev.filter(m => m.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  async function loadCategories() {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('name')
-        .eq('is_active', true)
-        .order('display_order', { ascending: true });
-
-      if (error) throw error;
-      setCategories(data?.map((c: any) => c.name) || ['Character', 'Object', 'Environment']);
-    } catch (error: any) {
-      console.error('Error loading categories:', error);
-      setCategories(['Character', 'Object', 'Environment']);
-    }
-  }
-
-
   useEffect(() => {
-    if (categories.length > 0 && formData.category === 'Character' && !categories.includes('Character')) {
-      setFormData(prev => ({ ...prev, category: categories[0] }));
-    }
-  }, [categories]);
-
-
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => setMessage(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
-
-  useEffect(() => {
-    filterModels();
-  }, [models, searchTerm, filterCategory, filterStatus]);
-
-  function filterModels() {
     let filtered = [...models];
 
-    if (searchTerm) {
-      filtered = filtered.filter(model =>
-        model.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        model.model_filename.toLowerCase().includes(searchTerm.toLowerCase())
+    if (searchQuery) {
+      filtered = filtered.filter((m) =>
+        m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.model_filename.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
     if (filterCategory !== 'all') {
-      filtered = filtered.filter(model => model.category === filterCategory);
+      filtered = filtered.filter((m) => m.category === filterCategory);
     }
 
-    if (filterStatus === 'active') {
-      filtered = filtered.filter(model => model.is_active);
-    } else if (filterStatus === 'inactive') {
-      filtered = filtered.filter(model => !model.is_active);
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter((m) =>
+        filterStatus === 'active' ? m.is_active : !m.is_active
+      );
     }
 
+    filtered.sort((a, b) => a.display_order - b.display_order);
     setFilteredModels(filtered);
+  }, [models, searchQuery, filterCategory, filterStatus]);
+
+  async function checkAuth() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate('/login');
+    }
   }
 
   async function loadModels() {
@@ -301,25 +285,34 @@ export default function AdminPage() {
       const newIndex = filteredModels.findIndex((m) => m.id === over.id);
 
       const reorderedModels = arrayMove(filteredModels, oldIndex, newIndex);
+      
+      // OPTIMISTIC UPDATE: Update UI immediately
       setFilteredModels(reorderedModels);
+      setModels(prev => {
+        const newModels = [...prev];
+        const oldIdx = newModels.findIndex(m => m.id === active.id);
+        const newIdx = newModels.findIndex(m => m.id === over.id);
+        return arrayMove(newModels, oldIdx, newIdx);
+      });
 
-      // Update display_order in database
       try {
+        // Update display_order in database
         const updates = reorderedModels.map((model, index) => ({
           id: model.id,
           display_order: index,
         }));
 
         for (const update of updates) {
-          await supabase
+          const { error } = await supabase
             .from('models_catalog')
             .update({ display_order: update.display_order })
             .eq('id', update.id);
+
+          if (error) throw error;
         }
 
-        // Reload to sync with database
-        await loadModels();
         setMessage({ type: 'success', text: 'Urutan berhasil diperbarui!' });
+        setTimeout(() => setMessage(null), 3000);
       } catch (error: any) {
         console.error('Error updating order:', error);
         setMessage({ type: 'error', text: 'Gagal memperbarui urutan: ' + error.message });
@@ -330,6 +323,10 @@ export default function AdminPage() {
   }
 
   async function handleToggleStatus(id: string, newStatus: boolean) {
+    // OPTIMISTIC UPDATE: Update UI immediately
+    setModels(prev => prev.map(m => m.id === id ? { ...m, is_active: newStatus } : m));
+    setFilteredModels(prev => prev.map(m => m.id === id ? { ...m, is_active: newStatus } : m));
+
     try {
       const { error } = await supabase
         .from('models_catalog')
@@ -340,251 +337,188 @@ export default function AdminPage() {
 
       setMessage({ 
         type: 'success', 
-        text: `Model berhasil di${newStatus ? 'aktifkan' : 'nonaktifkan'}!` 
+        text: `Status berhasil diubah menjadi ${newStatus ? 'Aktif' : 'Nonaktif'}!` 
       });
-      loadModels();
+      setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
       console.error('Error:', error);
       setMessage({ type: 'error', text: 'Gagal mengubah status: ' + error.message });
+      // Revert on error
+      loadModels();
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!formData.file) {
-      setMessage({ type: 'error', text: 'Pilih file GLB terlebih dahulu!' });
-      return;
-    }
-
+  async function handleUpload(file: File) {
     try {
       setUploading(true);
       setMessage(null);
 
-      const filename = formData.file.name;
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = fileName;
+
       const { error: uploadError } = await supabase.storage
         .from('3d-models')
-        .upload(filename, formData.file, { upsert: true });
+        .upload(filePath, file);
 
       if (uploadError) throw uploadError;
 
-      const { error: dbError } = await supabase.rpc('create_model', {
-        p_name: formData.name,
-        p_category: formData.category,
-        p_description: formData.description,
-        p_model_filename: filename,
+      const maxOrder = Math.max(...models.map((m) => m.display_order), -1);
+
+      const { error: insertError } = await supabase.from('models_catalog').insert({
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        category: 'Character',
+        description: '',
+        model_filename: fileName,
+        is_active: true,
+        display_order: maxOrder + 1,
       });
 
-      if (dbError) throw dbError;
+      if (insertError) throw insertError;
 
-      setMessage({ type: 'success', text: 'Model berhasil ditambahkan!' });
-      setFormData({ name: '', category: 'Character', description: '', file: null });
-      setShowAddForm(false);
-      
-      loadModels();
+      setMessage({ type: 'success', text: 'Model berhasil diunggah!' });
+      await loadModels();
     } catch (error: any) {
       console.error('Error:', error);
-      setMessage({ type: 'error', text: 'Error: ' + error.message });
+      setMessage({ type: 'error', text: 'Gagal mengunggah model: ' + error.message });
     } finally {
       setUploading(false);
     }
   }
 
   async function handleEdit(id: string) {
-    if (!editForm.name.trim()) {
-      setMessage({ type: 'error', text: 'Nama model tidak boleh kosong!' });
-      return;
-    }
-
     try {
       setUploading(true);
-      
-      let finalFilename = editForm.currentFilename;
+      setMessage(null);
+
+      let fileName = editForm.currentFilename;
 
       if (editForm.file) {
-        const newFilename = editForm.file.name;
+        const fileExt = editForm.file.name.split('.').pop();
+        fileName = `${Date.now()}.${fileExt}`;
+
         const { error: uploadError } = await supabase.storage
           .from('3d-models')
-          .upload(newFilename, editForm.file, { upsert: true });
+          .upload(fileName, editForm.file);
 
         if (uploadError) throw uploadError;
-        finalFilename = newFilename;
+
+        const model = models.find((m) => m.id === id);
+        if (model?.model_filename) {
+          await supabase.storage.from('3d-models').remove([model.model_filename]);
+        }
       }
 
-      const { error } = await supabase.rpc('update_model', {
-        p_id: id,
-        p_name: editForm.name,
-        p_description: editForm.description,
-        p_model_filename: finalFilename,
-      });
+      const { error: updateError } = await supabase
+        .from('models_catalog')
+        .update({
+          name: editForm.name,
+          description: editForm.description,
+          model_filename: fileName,
+        })
+        .eq('id', id);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      setMessage({ type: 'success', text: 'Model berhasil diupdate!' });
+      setMessage({ type: 'success', text: 'Model berhasil diperbarui!' });
       setEditingId(null);
       setEditForm({ name: '', description: '', file: null, currentFilename: '' });
-      loadModels();
+      await loadModels();
     } catch (error: any) {
       console.error('Error:', error);
-      setMessage({ type: 'error', text: 'Error: ' + error.message });
+      setMessage({ type: 'error', text: 'Gagal memperbarui model: ' + error.message });
     } finally {
       setUploading(false);
     }
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    navigate('/login');
+  }
+
   return (
     <>
-      {showCategoryManager && (
-        <CategoryManager
-          onClose={() => {
-            setShowCategoryManager(false);
-            loadCategories();
-          }}
-        />
-      )}
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 py-4 sm:py-8 px-2 sm:px-4">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+    {showCategoryManager ? (
+      <CategoryManager onClose={() => setShowCategoryManager(false)} />
+    ) : (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 py-4 sm:py-8 px-2 sm:px-4">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="text-center">
-          <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-2">Admin Dashboard</h1>
-          <p className="text-xs sm:text-base text-gray-600">Kelola 3D Model Catalog</p>
+        <div className="mb-4 sm:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 mb-1 sm:mb-2">
+              Admin Dashboard
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-600">Kelola koleksi model 3D Anda</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-lg shadow-md hover:shadow-lg transition-all text-xs sm:text-sm font-semibold"
+            >
+              <Home className="w-3 h-3 sm:w-4 sm:h-4" />
+              Kembali ke Home
+            </button>
+            <button
+              onClick={() => setShowCategoryManager(true)}
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-lg shadow-md hover:shadow-lg transition-all text-xs sm:text-sm font-semibold"
+            >
+              <FolderTree className="w-3 h-3 sm:w-4 sm:h-4" />
+              Kelola Kategori
+            </button>
+            <button
+              onClick={handleLogout}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg shadow-md hover:shadow-lg transition-all text-xs sm:text-sm font-semibold"
+            >
+              Logout
+            </button>
+          </div>
         </div>
 
-        {/* Message Alert */}
+        {/* Message */}
         {message && (
-          <div className={`p-3 sm:p-4 rounded-lg text-xs sm:text-sm font-medium ${
-            message.type === 'success' 
-              ? 'bg-green-100 text-green-800 border border-green-200' 
-              : 'bg-red-100 text-red-800 border border-red-200'
-          }`}>
+          <div
+            className={`mb-4 sm:mb-6 p-3 sm:p-4 rounded-xl shadow-lg text-xs sm:text-sm font-semibold ${
+              message.type === 'success'
+                ? 'bg-green-100 text-green-800 border-2 border-green-300'
+                : 'bg-red-100 text-red-800 border-2 border-red-300'
+            }`}
+          >
             {message.text}
           </div>
         )}
 
-        {/* Action Buttons */}
-        <div className="mb-4 flex gap-2">
-          <button
-            onClick={() => setShowCategoryManager(true)}
-            className="px-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-xl font-bold text-sm sm:text-base transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2">
-            <FolderTree className="w-4 h-4 sm:w-5 sm:h-5" />
-            Kelola Kategori
-          </button>
-          <button
-            onClick={() => navigate('/')}
-            className="px-4 py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-xl font-bold text-sm sm:text-base transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2"
+        {/* Upload Section */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-8 mb-4 sm:mb-8 border-2 border-gray-200">
+          <h2 className="text-lg sm:text-2xl font-black text-gray-800 mb-3 sm:mb-6">Tambah Model Baru</h2>
+          <div
+            {...getRootProps()}
+            className={`border-4 border-dashed rounded-2xl p-6 sm:p-12 text-center cursor-pointer transition-all ${
+              isDragActive
+                ? 'border-indigo-600 bg-indigo-50'
+                : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
+            }`}
           >
-            <Home className="w-4 h-4 sm:w-5 sm:h-5" />
-            Kembali ke Home
-          </button>
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex-1 px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-bold text-sm sm:text-base transition-all transform hover:scale-[1.02] shadow-lg flex items-center justify-center gap-2"
-          >
-            {showAddForm ? (
-              <>
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                Batal
-              </>
-            ) : (
-              <>
-                <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
-                Tambah Model Baru
-              </>
-            )}
-          </button>
+            <input {...getInputProps()} />
+            <Upload className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-indigo-600" />
+            <p className="text-xs sm:text-lg font-bold text-gray-700 mb-1 sm:mb-2">
+              {isDragActive ? 'Lepaskan file di sini' : 'Drag & drop file GLB atau klik untuk upload'}
+            </p>
+            <p className="text-[10px] sm:text-sm text-gray-500">Format: .glb</p>
+          </div>
         </div>
 
-        {/* Form Tambah Model */}
-        {showAddForm && (
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-6 border-2 border-indigo-100 mb-6">
-            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
-              <Upload className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
-              Form Tambah Model
-            </h2>
-            <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-1 sm:mb-2">Nama Model</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 transition-all text-xs sm:text-base"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-1 sm:mb-2">Kategori</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 transition-all text-xs sm:text-base"
-                >
-                  <option value="Character">Character</option>
-                  <option value="Object">Object</option>
-                  <option value="Environment">Environment</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-1 sm:mb-2">Deskripsi</label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 transition-all text-xs sm:text-base"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-bold text-gray-700 mb-1 sm:mb-2">File GLB</label>
-                <div
-                  {...getRootProps()}
-                  className={`border-2 border-dashed rounded-xl p-6 sm:p-8 text-center cursor-pointer transition-all ${
-                    isDragActive
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50'
-                  }`}
-                >
-                  <input {...getInputProps()} />
-                  <Upload className="w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-2 sm:mb-4 text-gray-400" />
-                  {formData.file ? (
-                    <div>
-                      <p className="text-xs sm:text-sm font-semibold text-green-600">File terpilih:</p>
-                      <p className="text-xs sm:text-sm text-gray-600">{formData.file.name}</p>
-                      <p className="text-[10px] sm:text-xs text-gray-400 mt-1">Klik atau drag untuk mengganti</p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-xs sm:text-sm font-semibold text-gray-600">
-                        {isDragActive ? 'Drop file di sini...' : 'Drag & drop file GLB di sini'}
-                      </p>
-                      <p className="text-[10px] sm:text-xs text-gray-400 mt-1">atau klik untuk memilih file</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={uploading}
-                className="w-full px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-xl font-bold text-xs sm:text-base transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-              >
-                {uploading ? 'Mengupload...' : 'Simpan Model'}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* Filter Section */}
-        <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-3 sm:p-4 border border-gray-200">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+        {/* Search and Filter */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-6 mb-4 sm:mb-8 border-2 border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             <div>
               <label className="block text-[10px] sm:text-xs font-bold text-gray-700 mb-1">Cari</label>
               <input
                 type="text"
                 placeholder="Cari nama atau file..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-gray-900 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm"
               />
             </div>
@@ -690,6 +624,7 @@ export default function AdminPage() {
         </div>
       </div>
     </div>
+    )}
     </>
   );
 }
