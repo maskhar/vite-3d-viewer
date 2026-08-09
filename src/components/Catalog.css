@@ -1,0 +1,140 @@
+.catalog {
+  padding: 6rem 2rem;
+  background: var(--bg-secondary);
+}
+
+.catalog-container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.catalog-header {
+  margin-bottom: 4rem;
+  text-align: center;
+}
+
+.catalog-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: 6px;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+}
+
+.catalog-count {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 2rem;
+}
+
+/* Tablet Large */
+@media (max-width: 1200px) {
+  .catalog {
+    padding: 5rem 2rem;
+  }
+
+  .catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.75rem;
+  }
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .catalog {
+    padding: 4.5rem 1.5rem;
+  }
+
+  .catalog-header {
+    margin-bottom: 3.5rem;
+  }
+
+  .catalog-title {
+    font-size: 2.25rem;
+    letter-spacing: 5px;
+  }
+
+  .catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+  }
+}
+
+/* Mobile Large */
+@media (max-width: 768px) {
+  .catalog {
+    padding: 4rem 1.5rem;
+  }
+
+  .catalog-header {
+    margin-bottom: 3rem;
+  }
+
+  .catalog-title {
+    font-size: 2rem;
+    letter-spacing: 4px;
+  }
+
+  .catalog-count {
+    font-size: 0.8125rem;
+    letter-spacing: 1.5px;
+  }
+
+  .catalog-grid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.25rem;
+  }
+}
+
+/* Mobile Medium */
+@media (max-width: 600px) {
+  .catalog {
+    padding: 3.5rem 1rem;
+  }
+
+  .catalog-header {
+    margin-bottom: 2.5rem;
+  }
+
+  .catalog-title {
+    font-size: 1.75rem;
+    letter-spacing: 3px;
+  }
+
+  .catalog-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+}
+
+/* Mobile Small */
+@media (max-width: 480px) {
+  .catalog {
+    padding: 3rem 1rem;
+  }
+
+  .catalog-header {
+    margin-bottom: 2rem;
+  }
+
+  .catalog-title {
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+  }
+
+  .catalog-count {
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+  }
+
+  .catalog-grid {
+    gap: 1rem;
+  }
+}

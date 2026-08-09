@@ -1,0 +1,9 @@
+﻿node_modules
+dist
+dist-ssr
+*.local
+.env
+.DS_Store
+
+# All GLB model files (will be stored in Supabase Storage)
+*.glb
